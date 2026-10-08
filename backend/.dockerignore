@@ -1,0 +1,65 @@
+# ============================================================
+# backend/.dockerignore — files excluded from Docker build context
+# ============================================================
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hypothesis/
+*.log
+
+# Type checking / linting artifacts
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — must never be baked into the image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and OS artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitkeep
+
+# Documentation (not needed at runtime)
+*.md
+docs/
+
+# Node (should not be here, but guard anyway)
+node_modules/
+
+# Model artifacts (large; mounted as a volume in docker-compose)
+model_artifacts/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

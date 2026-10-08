@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-10-08T11:06:32.846583+00:00",
+  "all_passed": true,
+  "scenarios": [
+    {
+      "scenario": "Standard Recovery",
+      "passed": true,
+      "final_state": "VERIFYING",
+      "interventions": 4,
+      "verification_attempts": 1,
+      "latency_seconds": 4.782583951950073
+    },
+    {
+      "scenario": "High-Value Human Review",
+      "passed": true,
+      "final_state": "ACTION_PENDING",
+      "human_review_created": true,
+      "latency_seconds": 1.0358467102050781
+    },
+    {
+      "scenario": "STOP Intervention",
+      "passed": true,
+      "final_state": "ESCALATED",
+      "latency_seconds": 11.158555507659912
+    },
+    {
+      "scenario": "Webhook Idempotency",
+      "passed": true,
+      "case_created": "5a8f4f66-d658-4447-b94c-15a1b4641909",
+      "total_cases_count": 1,
+      "latency_seconds": 3.023784875869751
+    },
+    {
+      "scenario": "Concurrency Serialization",
+      "passed": true,
+      "final_state": "VERIFYING",
+      "latency_seconds": 1.0094797611236572
+    }
+  ]
+}

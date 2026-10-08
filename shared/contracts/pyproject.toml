@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "averiq-contracts"
+version = "0.1.0"
+description = "Shared schemas, enums, and protocols for the Averiq AI Revenue Recovery Decision Engine."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+# ---------------------------------------------------------------------------
+# Runtime dependencies
+#
+# This package intentionally has the smallest possible dependency footprint.
+# Only pydantic is required at runtime.  The standard-library modules used
+# (enum, typing, datetime) require no explicit declaration.
+#
+# CRITICAL: Do NOT add imports from backend/, ai/, or any I/O package here.
+# This package must remain a pure data/interface layer with zero I/O and
+# zero implementation imports.  DATA-008, DATA-010.
+# ---------------------------------------------------------------------------
+dependencies = [
+    "pydantic>=2.6,<3",
+]
+
+[project.optional-dependencies]
+# Development extras — not required for production use.
+dev = [
+    "pytest>=8",
+    "hypothesis>=6",
+    "mypy>=1.9",
+    "ruff>=0.4",
+]
+
+[tool.setuptools.packages.find]
+where = ["../.."]
+include = ["shared.contracts*"]
+
+# ---------------------------------------------------------------------------
+# Ruff (linting + formatting)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "N", "ANN"]
+ignore = [
+    "ANN101",  # missing type annotation for self
+    "ANN102",  # missing type annotation for cls
+]
+
+# ---------------------------------------------------------------------------
+# Mypy (strict type checking)
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = false
+disallow_untyped_defs = true
+disallow_any_generics = true
+warn_return_any = true

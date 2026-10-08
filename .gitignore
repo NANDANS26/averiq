@@ -1,0 +1,124 @@
+# =============================================================================
+# Averiq — .gitignore
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Environment / secrets — NEVER commit
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+.eggs/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.lcov
+.hypothesis/
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# ---------------------------------------------------------------------------
+# Node / Frontend
+# ---------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# npm / yarn / pnpm lock files (keep package-lock.json / yarn.lock tracked)
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# ---------------------------------------------------------------------------
+# Model artifacts — large binary files; not in git
+# ---------------------------------------------------------------------------
+model_artifacts/
+# Keep the directory placeholder tracked so the directory exists on fresh clone
+!model_artifacts/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+.docker/
+
+# ---------------------------------------------------------------------------
+# OS artefacts
+# ---------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# IDE / editors
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/settings.json
+.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# ---------------------------------------------------------------------------
+# Celery beat schedule files & local IDE state
+# ---------------------------------------------------------------------------
+celerybeat-schedule*
+.kiro/
+*.log
+logs/
+
+
+
+# ---------------------------------------------------------------------------
+# Alembic generated (keep migrations tracked, but not transient cache)
+# ---------------------------------------------------------------------------
+infrastructure/alembic/__pycache__/
+
+# ---------------------------------------------------------------------------
+# Playwright
+# ---------------------------------------------------------------------------
+test-results/
+playwright-report/
+playwright/.cache/

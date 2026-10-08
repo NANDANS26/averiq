@@ -1,0 +1,78 @@
+# =============================================================================
+# Averiq — Docker Compose Development Overrides
+#
+# This file is automatically merged by Docker Compose when running:
+#   docker compose up
+#
+# Overrides for local development:
+#   - Hot-reload volume mounts for backend and frontend source code
+#   - Uvicorn --reload flag for the backend FastAPI server
+#   - Port exposure for postgres and redis (for direct local tool access)
+#
+# Production deployments should NOT use this file.
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # backend — mount source code for hot-reload (uvicorn --reload watches files)
+  # ---------------------------------------------------------------------------
+  backend:
+    volumes:
+      - ./backend:/app/backend          # backend source — watched by uvicorn --reload
+      - ./shared:/app/shared            # shared contracts
+    command: >
+      uvicorn backend.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --reload-dir /app/backend
+
+  # ---------------------------------------------------------------------------
+  # worker — mount source code so worker picks up code changes on restart
+  # (Celery workers do not hot-reload; restart the container after changes)
+  # ---------------------------------------------------------------------------
+  worker:
+    volumes:
+      - ./backend:/app/backend
+      - ./shared:/app/shared
+
+  # ---------------------------------------------------------------------------
+  # beat — same source mount as worker
+  # ---------------------------------------------------------------------------
+  beat:
+    volumes:
+      - ./backend:/app/backend
+      - ./shared:/app/shared
+
+  # ---------------------------------------------------------------------------
+  # frontend — Vite dev server with HMR instead of nginx static serving
+  # Overrides the production nginx-based image with Vite's dev server.
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: builder                   # stop at the builder stage (Node.js)
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    volumes:
+      - ./frontend/src:/app/src         # source watched by Vite HMR
+      - ./frontend/public:/app/public
+    ports:
+      - "5173:5173"                     # Vite dev server (replaces 3000:80 in prod)
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+
+  # ---------------------------------------------------------------------------
+  # postgres — expose port for direct access from host tools (psql, DBeaver, etc.)
+  # ---------------------------------------------------------------------------
+  postgres:
+    ports:
+      - "5432:5432"
+
+  # ---------------------------------------------------------------------------
+  # redis — expose port for direct access from host tools (redis-cli, etc.)
+  # ---------------------------------------------------------------------------
+  redis:
+    ports:
+      - "6379:6379"

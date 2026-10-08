@@ -1,0 +1,203 @@
+# =============================================================================
+# Averiq — Docker Compose
+#
+# Usage:
+#   docker compose up                          # start all core services
+#   docker compose --profile observability up  # include OTel collector
+#   docker compose up backend worker beat      # start only backend services
+#
+# Requirements: NFR-DEV-001, NFR-DEV-006
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # postgres — primary data store
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-averiq}
+      POSTGRES_USER: ${POSTGRES_USER:-averiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-averiq}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-averiq}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # redis — queue broker, rate limiting, advisory locks
+  # Redis is NOT the financial source of truth. PostgreSQL is authoritative.
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # backend — FastAPI application server
+  # Build context is the project root so shared/contracts/ is accessible.
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      DATABASE_SYNC_URL: postgresql+psycopg2://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn backend.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # worker — Celery task workers
+  # Shares the same image as backend; overrides the default CMD.
+  # Queues: default, webhook, decisions, verification
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      DATABASE_SYNC_URL: postgresql+psycopg2://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A backend.worker worker
+      --loglevel=INFO
+      --concurrency=4
+      -Q default,webhook,decisions,verification
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # beat — Celery beat scheduler
+  # Runs outbox reconciliation (every 30s) and verification retry scheduling.
+  # Kept separate from the worker to provide stable scheduling without
+  # interfering with worker concurrency.
+  # ---------------------------------------------------------------------------
+  beat:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      DATABASE_SYNC_URL: postgresql+psycopg2://${POSTGRES_USER:-averiq}:${POSTGRES_PASSWORD:-averiq}@postgres:5432/${POSTGRES_DB:-averiq}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    command: >
+      celery -A backend.worker beat
+      --loglevel=INFO
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # frontend — React SPA served via nginx
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - averiq
+
+  # ---------------------------------------------------------------------------
+  # otel_collector — OpenTelemetry Collector (optional)
+  # Only started when --profile observability is passed.
+  # Pin to a specific version; never use 'latest'.
+  # The application emits OTel metrics regardless; if no collector is running,
+  # metrics are logged in OTel-compatible format.
+  # ---------------------------------------------------------------------------
+  otel_collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    restart: unless-stopped
+    volumes:
+      - ./infrastructure/otel-collector-config.yml:/etc/otel/config.yaml:ro
+    command: ["--config=/etc/otel/config.yaml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    profiles:
+      - observability
+    networks:
+      - averiq
+
+# =============================================================================
+# Named volumes
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  averiq:
+    driver: bridge

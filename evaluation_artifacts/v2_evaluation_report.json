@@ -1,0 +1,250 @@
+{
+  "evaluation_timestamp": "2026-10-07T16:57:34.481719+00:00",
+  "test_set_size": 3000,
+  "models_summary": {
+    "Heuristic Baseline": {
+      "roc_auc": 0.5,
+      "pr_auc": 0.3487,
+      "brier_score": 0.2271,
+      "log_loss": 0.6466,
+      "f1": 0.0,
+      "precision": 0.0,
+      "recall": 0.0
+    },
+    "Logistic Regression Baseline": {
+      "roc_auc": 0.7495,
+      "pr_auc": 0.5916,
+      "brier_score": 0.2006,
+      "log_loss": 0.5912,
+      "f1": 0.6188,
+      "precision": 0.5968,
+      "recall": 0.6424
+    },
+    "Raw LightGBM": {
+      "roc_auc": 0.7935,
+      "pr_auc": 0.6234,
+      "brier_score": 0.1724,
+      "log_loss": 0.5174,
+      "f1": 0.6095,
+      "precision": 0.649,
+      "recall": 0.5746
+    },
+    "Calibrated LightGBM": {
+      "roc_auc": 0.7933,
+      "pr_auc": 0.6092,
+      "brier_score": 0.1729,
+      "log_loss": 0.5178,
+      "f1": 0.5281,
+      "precision": 0.6586,
+      "recall": 0.4407
+    }
+  },
+  "calibration_analysis": {
+    "ece": 0.035,
+    "decile_bins": [
+      {
+        "bin": "(0.009000000000000001, 0.0623]",
+        "count": 324,
+        "mean_calibrated_pred": 0.0602,
+        "mean_raw_pred": 0.0771,
+        "empirical_recovery_rate": 0.0586,
+        "calibrated_error": 0.0016
+      },
+      {
+        "bin": "(0.0623, 0.0769]",
+        "count": 327,
+        "mean_calibrated_pred": 0.0747,
+        "mean_raw_pred": 0.1061,
+        "empirical_recovery_rate": 0.0856,
+        "calibrated_error": 0.011
+      },
+      {
+        "bin": "(0.0769, 0.114]",
+        "count": 278,
+        "mean_calibrated_pred": 0.1141,
+        "mean_raw_pred": 0.1379,
+        "empirical_recovery_rate": 0.1007,
+        "calibrated_error": 0.0134
+      },
+      {
+        "bin": "(0.114, 0.246]",
+        "count": 434,
+        "mean_calibrated_pred": 0.2063,
+        "mean_raw_pred": 0.2225,
+        "empirical_recovery_rate": 0.1843,
+        "calibrated_error": 0.022
+      },
+      {
+        "bin": "(0.246, 0.31]",
+        "count": 192,
+        "mean_calibrated_pred": 0.3061,
+        "mean_raw_pred": 0.3173,
+        "empirical_recovery_rate": 0.2917,
+        "calibrated_error": 0.0144
+      },
+      {
+        "bin": "(0.31, 0.391]",
+        "count": 430,
+        "mean_calibrated_pred": 0.3774,
+        "mean_raw_pred": 0.4024,
+        "empirical_recovery_rate": 0.4395,
+        "calibrated_error": 0.0621
+      },
+      {
+        "bin": "(0.391, 0.495]",
+        "count": 315,
+        "mean_calibrated_pred": 0.4952,
+        "mean_raw_pred": 0.5246,
+        "empirical_recovery_rate": 0.5873,
+        "calibrated_error": 0.0921
+      },
+      {
+        "bin": "(0.495, 0.619]",
+        "count": 222,
+        "mean_calibrated_pred": 0.6081,
+        "mean_raw_pred": 0.6072,
+        "empirical_recovery_rate": 0.6486,
+        "calibrated_error": 0.0406
+      },
+      {
+        "bin": "(0.619, 0.723]",
+        "count": 471,
+        "mean_calibrated_pred": 0.7044,
+        "mean_raw_pred": 0.6913,
+        "empirical_recovery_rate": 0.6624,
+        "calibrated_error": 0.042
+      },
+      {
+        "bin": "(0.723, 0.75]",
+        "count": 7,
+        "mean_calibrated_pred": 0.75,
+        "mean_raw_pred": 0.8053,
+        "empirical_recovery_rate": 0.7143,
+        "calibrated_error": 0.0357
+      }
+    ]
+  },
+  "feature_importances": [
+    [
+      "is_transient_error",
+      0.4699
+    ],
+    [
+      "failure_category_idx",
+      0.264
+    ],
+    [
+      "customer_historical_success_rate",
+      0.0974
+    ],
+    [
+      "amount_paise",
+      0.0583
+    ],
+    [
+      "customer_tenure_days",
+      0.0287
+    ],
+    [
+      "time_since_failure_seconds",
+      0.0221
+    ],
+    [
+      "gateway_health_score",
+      0.0171
+    ],
+    [
+      "hour_of_day",
+      0.0147
+    ],
+    [
+      "day_of_week",
+      0.0077
+    ],
+    [
+      "merchant_risk_tier",
+      0.0062
+    ],
+    [
+      "payment_method_idx",
+      0.0056
+    ],
+    [
+      "payment_attempt_count",
+      0.0038
+    ],
+    [
+      "has_subscription",
+      0.0029
+    ],
+    [
+      "exposure_tier",
+      0.0016
+    ]
+  ],
+  "subgroup_metrics": {
+    "category_AUTHENTICATION_FAILURE": {
+      "count": 635,
+      "observed_rate": 0.5465,
+      "roc_auc": 0.5951,
+      "brier_score": 0.2413
+    },
+    "category_CARD_DECLINED": {
+      "count": 180,
+      "observed_rate": 0.2667,
+      "roc_auc": 0.6899,
+      "brier_score": 0.18
+    },
+    "category_EXPIRED_CARD": {
+      "count": 434,
+      "observed_rate": 0.2995,
+      "roc_auc": 0.6264,
+      "brier_score": 0.2023
+    },
+    "category_FRAUD_SUSPECTED": {
+      "count": 225,
+      "observed_rate": 0.0311,
+      "roc_auc": 0.6714,
+      "brier_score": 0.0321
+    },
+    "category_INSUFFICIENT_FUNDS": {
+      "count": 539,
+      "observed_rate": 0.0909,
+      "roc_auc": 0.5335,
+      "brier_score": 0.0832
+    },
+    "category_LIMIT_EXCEEDED": {
+      "count": 297,
+      "observed_rate": 0.4209,
+      "roc_auc": 0.6566,
+      "brier_score": 0.2352
+    },
+    "category_NETWORK_TIMEOUT": {
+      "count": 224,
+      "observed_rate": 0.6875,
+      "roc_auc": 0.5001,
+      "brier_score": 0.219
+    },
+    "category_TECHNICAL_FAILURE": {
+      "count": 222,
+      "observed_rate": 0.6982,
+      "roc_auc": 0.5616,
+      "brier_score": 0.2092
+    },
+    "category_UNKNOWN": {
+      "count": 244,
+      "observed_rate": 0.127,
+      "roc_auc": 0.5395,
+      "brier_score": 0.114
+    }
+  },
+  "incremental_analysis": {
+    "targeted_share": 0.3,
+    "targeted_count": 1015,
+    "targeted_observed_recovery": 0.6365,
+    "targeted_true_uplift": 0.3001,
+    "untargeted_observed_recovery": 0.2015,
+    "untargeted_true_uplift": 0.1189,
+    "uplift_efficiency_multiplier": 2.52
+  }
+}

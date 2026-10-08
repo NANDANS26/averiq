@@ -1,0 +1,71 @@
+# =============================================================================
+# Averiq — OpenTelemetry Collector Configuration
+#
+# Minimal configuration: OTLP receivers → logging exporter.
+# Extend this file to add additional exporters (Prometheus, Jaeger, etc.)
+# when integrating with an observability backend.
+#
+# Usage:
+#   docker compose --profile observability up
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Receivers
+# Accepts telemetry data from the Averiq backend via OTLP.
+# ---------------------------------------------------------------------------
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317   # gRPC OTLP receiver
+      http:
+        endpoint: 0.0.0.0:4318   # HTTP OTLP receiver
+
+# ---------------------------------------------------------------------------
+# Processors
+# Basic memory limiter to prevent the collector from consuming unbounded RAM.
+# ---------------------------------------------------------------------------
+processors:
+  batch:
+    # Batch telemetry before exporting to reduce network overhead.
+    timeout: 5s
+    send_batch_size: 1024
+
+  memory_limiter:
+    # Prevent OOM in the collector process.
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+
+# ---------------------------------------------------------------------------
+# Exporters
+# Logs all received telemetry to stdout in a human-readable format.
+# Replace or extend this with a production exporter as needed.
+# ---------------------------------------------------------------------------
+exporters:
+  logging:
+    # Verbosity: detailed | normal | basic
+    verbosity: normal
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+# ---------------------------------------------------------------------------
+# Service pipeline
+# Wires receivers → processors → exporters.
+# ---------------------------------------------------------------------------
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging]
+
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging]

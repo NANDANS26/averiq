@@ -1,0 +1,49 @@
+{
+  "dataset_name": "Averiq Dataset 2.0 Payment Recovery Benchmark",
+  "generated_at": "2026-10-07T16:55:40.453198+00:00",
+  "seed": 42,
+  "row_count": 20000,
+  "splits": {
+    "train": {
+      "count": 14000,
+      "start": "2023-01-01T01:09:44+00:00",
+      "end": "2023-09-13T14:39:40+00:00",
+      "recovery_rate": 0.3529
+    },
+    "val": {
+      "count": 3000,
+      "start": "2023-09-13T14:40:41+00:00",
+      "end": "2023-11-06T07:47:31+00:00",
+      "recovery_rate": 0.3357
+    },
+    "test": {
+      "count": 3000,
+      "start": "2023-11-06T08:21:46+00:00",
+      "end": "2023-12-31T23:07:47+00:00",
+      "recovery_rate": 0.3487
+    }
+  },
+  "overall_recovery_rate": 0.3497,
+  "total_at_risk_paise": 2197871500,
+  "total_recovered_paise": 823509451,
+  "decision_time_feature_count": 19,
+  "prohibited_leakage_feature_count": 20,
+  "treatments": {
+    "CUSTOMER_ACTION": {
+      "count": 3422,
+      "recovery_rate": 0.4234
+    },
+    "NO_INTERVENTION": {
+      "count": 4415,
+      "recovery_rate": 0.1146
+    },
+    "PAYMENT_LINK": {
+      "count": 8551,
+      "recovery_rate": 0.3559
+    },
+    "RETRY": {
+      "count": 3612,
+      "recovery_rate": 0.5526
+    }
+  }
+}

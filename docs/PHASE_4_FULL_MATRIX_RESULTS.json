@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-10-08T12:46:35.429986+00:00",
+  "all_passed": true,
+  "matrix_results": {
+    "TEST_1": {
+      "passed": true,
+      "state": "ESCALATED"
+    },
+    "TEST_2": {
+      "passed": true,
+      "state": "VERIFYING"
+    },
+    "TEST_3": {
+      "passed": true,
+      "state": "VERIFYING"
+    },
+    "TEST_4": {
+      "passed": true,
+      "state": "STOPPED"
+    },
+    "TEST_5": {
+      "passed": true
+    },
+    "TEST_6": {
+      "passed": true
+    },
+    "TEST_7": {
+      "passed": true,
+      "case_count": 1
+    },
+    "TEST_8": {
+      "passed": true,
+      "ops_count": 1
+    },
+    "TEST_9": {
+      "passed": true,
+      "class": "AttributionClass.DIRECT_INTERVENTION"
+    },
+    "TEST_10": {
+      "passed": true,
+      "ops_count": 1
+    },
+    "TEST_11": {
+      "passed": true
+    },
+    "TEST_12": {
+      "passed": true,
+      "state": "ESCALATED"
+    },
+    "TEST_13": {
+      "passed": true,
+      "state": "VERIFYING"
+    },
+    "TEST_14": {
+      "passed": true,
+      "category": "INSUFFICIENT_FUNDS",
+      "fallback_rec_rate": 0.35
+    },
+    "TEST_15": {
+      "passed": true,
+      "state": "ACTION_PENDING"
+    },
+    "DATABASE_INTEGRITY": {
+      "passed": true,
+      "negative_amounts": 0,
+      "orphaned_cases": 0,
+      "audit_count": 470
+    }
+  }
+}
