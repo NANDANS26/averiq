@@ -4,6 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { formatPaise, formatDateTime } from "@/lib/utils";
 
+import { useAuth } from "@/contexts/AuthContext";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 interface TraceCandidate {
   action: string;
   probability: number;
@@ -13,30 +16,6 @@ interface TraceCandidate {
   expected_net_paise: number;
   policy_decision: string;
   blocking_reasons?: string[];
-}
-
-interface CaseTraceData {
-  case_id: string;
-  amount_at_risk_paise: number;
-  currency: string;
-  baseline_probability_p0: number;
-  selected_action: string;
-  selection_reason_code: string;
-  selection_reason_detail: string;
-  model_version: string;
-  is_fallback: boolean;
-  candidates: TraceCandidate[];
-  final_state: string;
-  external_operation_id?: string;
-  verification_outcome?: string;
-  timeline_events: Array<{
-    timestamp: string;
-    from_state?: string;
-    to_state?: string;
-    action_type: string;
-    actor: string;
-    detail?: string;
-  }>;
 }
 
 interface CaseDetailResponse {
@@ -59,27 +38,76 @@ interface CaseDetailResponse {
 
 export default function CaseIntelligence() {
   const { caseId } = useParams<{ caseId: string }>();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"overview" | "decision" | "policy" | "execution" | "audit">("decision");
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   // Fetch full case record
-  const { data: caseData, isLoading: caseLoading } = useQuery<CaseDetailResponse>({
+  const { data: caseData, isLoading: caseLoading, refetch: refetchCase } = useQuery<CaseDetailResponse>({
     queryKey: ["case-detail", caseId],
-    queryFn: () => apiClient.get(`/api/v1/cases/${caseId}`).then((r) => r.data),
+    queryFn: () => apiClient.get(`/cases/${caseId}`).then((r) => r.data),
     enabled: Boolean(caseId),
   });
 
   // Fetch explainable decision trace
-  const { data: traceData, isLoading: traceLoading } = useQuery<CaseTraceData>({
+  const { data: traceDataRaw, isLoading: traceLoading, refetch: refetchTrace } = useQuery<any>({
     queryKey: ["case-trace", caseId],
-    queryFn: () => apiClient.get(`/api/v1/cases/${caseId}/trace`).then((r) => r.data),
+    queryFn: () => apiClient.get(`/cases/${caseId}/trace`).then((r) => r.data),
     enabled: Boolean(caseId),
   });
 
   // Fetch safe audit events
-  const { data: auditEvents } = useQuery({
+  const { data: auditEvents, refetch: refetchAudit } = useQuery({
     queryKey: ["case-audit", caseId],
-    queryFn: () => apiClient.get(`/api/v1/cases/${caseId}/audit`).then((r) => r.data),
+    queryFn: () => apiClient.get(`/cases/${caseId}/audit`).then((r) => r.data),
     enabled: Boolean(caseId),
+  });
+
+  // Fetch human review pending if in AWAITING_APPROVAL
+  const { data: pendingReviews } = useQuery<any[]>({
+    queryKey: ["case-reviews", caseId],
+    queryFn: () => apiClient.get("/review").then((r) => r.data),
+    enabled: caseData?.state === "AWAITING_APPROVAL" && (user?.role === "ADMIN" || user?.role === "OPERATOR"),
+  });
+
+  const matchingReview = (pendingReviews ?? []).find((r) => r.case_id === caseId);
+
+  // Operator approvals mutation
+  const approveMutation = useMutation({
+    mutationFn: (notes: string) =>
+      apiClient.post(`/interventions/${matchingReview?.intervention_id}/approve`, { notes }),
+    onSuccess: () => {
+      setActionFeedback("Intervention approved successfully by operator.");
+      queryClient.invalidateQueries({ queryKey: ["case-detail", caseId] });
+      queryClient.invalidateQueries({ queryKey: ["case-trace", caseId] });
+      queryClient.invalidateQueries({ queryKey: ["operations-cases"] });
+      queryClient.invalidateQueries({ queryKey: ["review"] });
+      refetchCase();
+      refetchTrace();
+      refetchAudit();
+    },
+    onError: (err: any) => {
+      setActionFeedback(`Approval failed: ${err.response?.data?.error || err.message}`);
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (notes: string) =>
+      apiClient.post(`/interventions/${matchingReview?.intervention_id}/reject`, { notes }),
+    onSuccess: () => {
+      setActionFeedback("Intervention rejected by operator.");
+      queryClient.invalidateQueries({ queryKey: ["case-detail", caseId] });
+      queryClient.invalidateQueries({ queryKey: ["case-trace", caseId] });
+      queryClient.invalidateQueries({ queryKey: ["operations-cases"] });
+      queryClient.invalidateQueries({ queryKey: ["review"] });
+      refetchCase();
+      refetchTrace();
+      refetchAudit();
+    },
+    onError: (err: any) => {
+      setActionFeedback(`Rejection failed: ${err.response?.data?.error || err.message}`);
+    },
   });
 
   if (caseLoading || traceLoading) {
@@ -98,8 +126,37 @@ export default function CaseIntelligence() {
     );
   }
 
-  const p0 = traceData?.baseline_probability_p0 ?? 0.35;
-  const candidates = traceData?.candidates ?? [];
+  const p0 = traceDataRaw?.explainability?.baseline_recovery_probability_p0 ?? 0.35;
+  const selectedAction = traceDataRaw?.explainability?.model_preferred_action ?? "NO_INTERVENTION";
+  const reasonCode = traceDataRaw?.explainability?.reason_codes?.[0] ?? "OPTIMAL_NET_SURPLUS";
+  const mathEvals = traceDataRaw?.explainability?.mathematical_evaluations ?? [];
+  const rawCandidates = traceDataRaw?.candidates ?? [];
+
+  // Build unified candidate evaluations list
+  const candidates: TraceCandidate[] = mathEvals.length > 0
+    ? mathEvals.map((m: any) => {
+        const matchingRaw = rawCandidates.find((r: any) => r.intervention_type === m.action);
+        return {
+          action: m.action,
+          probability: m.P_action,
+          expected_gross_paise: Math.round(m.P_action * caseData.payment_amount_at_risk),
+          expected_incremental_paise: Math.round((m.P_action - p0) * caseData.payment_amount_at_risk),
+          cost_paise: m.cost_paise,
+          expected_net_paise: m.expected_net_recovery_value_paise,
+          policy_decision: matchingRaw?.policy_decision ?? (m.action === selectedAction ? "PERMIT" : "EVALUATED"),
+          blocking_reasons: matchingRaw?.blocking_rules ?? [],
+        };
+      })
+    : rawCandidates.map((r: any) => ({
+        action: r.intervention_type,
+        probability: r.expected_recovery_value != null ? r.expected_recovery_value / caseData.payment_amount_at_risk : p0,
+        expected_gross_paise: r.expected_recovery_value ?? 0,
+        expected_incremental_paise: (r.expected_recovery_value ?? 0) - Math.floor(p0 * caseData.payment_amount_at_risk),
+        cost_paise: 0,
+        expected_net_paise: (r.expected_recovery_value ?? 0) - Math.floor(p0 * caseData.payment_amount_at_risk),
+        policy_decision: r.policy_decision ?? "PERMIT",
+        blocking_reasons: r.blocking_rules ?? [],
+      }));
 
   return (
     <div className="space-y-6">
@@ -186,6 +243,52 @@ export default function CaseIntelligence() {
       {/* Tab: Decision Intelligence (Core Explainability Screen) */}
       {activeTab === "decision" && (
         <div className="space-y-6">
+          {/* Human Review Approval Action Box for Operator/Admin */}
+          {caseData.state === "AWAITING_APPROVAL" && (
+            <div className="p-4 rounded-xl border border-amber-800/80 bg-amber-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="text-amber-400 font-semibold text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  Operator Action Required: Human Approval Pending
+                </div>
+                <p className="text-xs text-slate-300 mt-1">
+                  Policy thresholds flagged this high-exposure intervention for operator verification.
+                  {matchingReview && (
+                    <span className="ml-1 text-slate-400 font-mono">
+                      (Review ID: {matchingReview.id.slice(0, 8)}...)
+                    </span>
+                  )}
+                </p>
+                {actionFeedback && (
+                  <p className="text-xs text-amber-200 mt-2 font-mono font-medium">{actionFeedback}</p>
+                )}
+              </div>
+
+              {(user?.role === "ADMIN" || user?.role === "OPERATOR") ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => approveMutation.mutate("Approved via Case Intelligence screen")}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-xs font-sans transition-colors"
+                  >
+                    {approveMutation.isPending ? "Approving..." : "Approve Intervention"}
+                  </button>
+                  <button
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => rejectMutation.mutate("Rejected via Case Intelligence screen")}
+                    className="px-3.5 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white font-medium text-xs font-sans transition-colors"
+                  >
+                    {rejectMutation.isPending ? "Rejecting..." : "Reject Intervention"}
+                  </button>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic font-sans">
+                  Read-only access: Operator or Admin role required to approve
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Baseline & Model Metadata Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
@@ -201,20 +304,20 @@ export default function CaseIntelligence() {
             <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
               <div className="text-xs text-slate-400 font-medium">Selected Intervention</div>
               <div className="mt-1 text-2xl font-bold text-indigo-400 font-mono">
-                {traceData?.selected_action ?? "NO_INTERVENTION"}
+                {selectedAction}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Reason: {traceData?.selection_reason_code ?? "OPTIMAL_NET_SURPLUS"}
+                Reason: {reasonCode}
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
               <div className="text-xs text-slate-400 font-medium">Model Inference Provenance</div>
               <div className="mt-1 text-sm font-semibold text-slate-200 font-mono truncate">
-                {traceData?.model_version ?? "action-value-v3.0-calibrated"}
+                {traceDataRaw?.model_version ?? "action-value-v3.0-calibrated"}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Fallback: {traceData?.is_fallback ? "Active (P0=0.35)" : "Standard (LightGBM)"}
+                Fallback: {traceDataRaw?.fallback_reason ? "Active" : "Standard (LightGBM)"}
               </p>
             </div>
           </div>
@@ -250,7 +353,7 @@ export default function CaseIntelligence() {
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {candidates.map((cand) => {
-                    const isSelected = cand.action === traceData?.selected_action;
+                    const isSelected = cand.action === selectedAction;
                     const deltaProb = cand.probability - p0;
                     return (
                       <tr
@@ -318,8 +421,8 @@ export default function CaseIntelligence() {
                 Deterministic Explanation
               </div>
               <p className="text-slate-300 leading-relaxed font-sans">
-                {traceData?.selection_reason_detail ??
-                  `Action ${traceData?.selected_action} was selected because it maximizes net incremental recovery value after factoring policy rules and execution friction costs.`}
+                {traceDataRaw?.explainability?.explanation_text ??
+                  `Action ${selectedAction} was selected because it maximizes net incremental recovery value after factoring policy rules and execution friction costs.`}
               </p>
             </div>
           </div>
@@ -374,15 +477,17 @@ export default function CaseIntelligence() {
             <div className="p-4 rounded-lg border border-slate-800 bg-slate-950 space-y-2">
               <div className="text-slate-400 text-[11px] uppercase">External Gateway Operation</div>
               <div className="text-white font-semibold text-sm">
-                {traceData?.external_operation_id ?? "No external operation required (Internal)"}
+                {traceDataRaw?.execution_result?.external_operation_id ?? "No external operation required (Internal)"}
               </div>
-              <div className="text-slate-500">Capability: PAYMENT_GATEWAY_LINK</div>
+              <div className="text-slate-500">
+                Status: {traceDataRaw?.execution_result?.status ?? "N/A"}
+              </div>
             </div>
 
             <div className="p-4 rounded-lg border border-slate-800 bg-slate-950 space-y-2">
               <div className="text-slate-400 text-[11px] uppercase">Settlement Outcome</div>
               <div className="text-emerald-400 font-semibold text-sm">
-                {traceData?.verification_outcome ?? "VERIFIED_SETTLED"}
+                {traceDataRaw?.verification_outcome ?? (caseData.state === "RECOVERED" ? "VERIFIED_SETTLED" : caseData.state)}
               </div>
               <div className="text-slate-500">Reconciliation: Webhook event verified via gateway</div>
             </div>

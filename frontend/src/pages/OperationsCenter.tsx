@@ -11,7 +11,7 @@ export default function OperationsCenter() {
   // Fetch all active or interesting operational cases
   const { data: casesData, isLoading, refetch } = useQuery<{ items: RevenueRiskCase[] }>({
     queryKey: ["operations-cases"],
-    queryFn: () => apiClient.get("/api/v1/cases?limit=50").then((res) => res.data),
+    queryFn: () => apiClient.get("/cases?limit=50").then((res) => res.data),
     refetchInterval: 10_000,
   });
 

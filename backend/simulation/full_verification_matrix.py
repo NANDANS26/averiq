@@ -610,23 +610,46 @@ class FullVerificationRunner:
         return passed
 
     async def run_test_13_policy_violation_blocked(self):
-        """TEST 13: Policy violation -> execution blocked"""
+        """TEST 13: Policy violation -> execution blocked (Strict Semantics)"""
         print("\n[RUNNING TEST 13] Policy violation -> execution blocked")
-        case_id, _, _ = await self.create_fixture(amount=75000, meta={"blocked_by_policy": True})
+        # Real policy violation: fail_cat="FRAUD_SUSPECTED" triggers PolicyEngine fraud_block
+        # rule (Rule 8), which blocks all non-STOP intervention arms and permits only STOP.
+        case_id, _, _ = await self.create_fixture(
+            amount=75000,
+            error_code="FRAUD_SUSPECTED",
+            desc="Suspicious fraud pattern flagged by gateway",
+            fail_cat="FRAUD_SUSPECTED",
+        )
         run_decision_pipeline.delay(str(case_id), str(self.merchant_id))
 
         final_state = None
+        ops_count = 0
+        has_policy_block_audit = False
+
         for _ in range(15):
             await asyncio.sleep(1)
             async with self.session_factory() as session:
                 c = (await session.execute(select(RevenueRiskCase).where(RevenueRiskCase.id == case_id))).scalar_one_or_none()
-                if c and c.state in ("STOPPED", "VERIFYING", "ESCALATED"):
+                if c and c.state in ("STOPPED", "VERIFYING", "ESCALATED", "ACTION_APPROVED"):
                     final_state = c.state
+                    ops = (await session.execute(select(ExternalOperation).where(ExternalOperation.case_id == case_id))).scalars().all()
+                    ops_count = len(ops)
+                    audits = (await session.execute(select(AuditEvent).where(AuditEvent.case_id == case_id))).scalars().all()
+                    has_policy_block_audit = any(
+                        a.to_state == "STOPPED" or "policy" in (a.actor or "").lower()
+                        for a in audits
+                    )
                     break
 
-        passed = final_state is not None
-        print(f"  Result: policy-governed final state = {final_state}, passed={passed}")
-        self.results["TEST_13"] = {"passed": passed, "state": final_state}
+        # Strict invariants: final_state MUST be STOPPED, ops_count MUST be 0
+        passed = (final_state == "STOPPED") and (ops_count == 0) and has_policy_block_audit
+        print(f"  Result: policy-governed final state = {final_state}, external_ops = {ops_count}, audit_proved = {has_policy_block_audit}, passed={passed}")
+        self.results["TEST_13"] = {
+            "passed": passed,
+            "state": final_state,
+            "ops_count": ops_count,
+            "has_policy_block_audit": has_policy_block_audit,
+        }
         return passed
 
     async def run_test_14_model_unavailable_fallback(self):

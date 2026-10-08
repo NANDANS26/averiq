@@ -148,3 +148,12 @@ async def check_readiness() -> tuple[ReadinessResponse, int]:
         components=components,
     )
     return res, http_code
+
+
+@router.get("/system/readiness", response_model=ReadinessResponse, tags=["system"])
+@router.get("/readiness", response_model=ReadinessResponse, tags=["system"])
+async def get_system_readiness(response: Response) -> ReadinessResponse:
+    """Readiness probe for PostgreSQL, Redis, Celery, and model artifact."""
+    res, code = await check_readiness()
+    response.status_code = code
+    return res

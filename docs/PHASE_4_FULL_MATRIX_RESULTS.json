@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-08T12:46:35.429986+00:00",
+  "timestamp": "2026-10-08T16:22:26.096458+00:00",
   "all_passed": true,
   "matrix_results": {
     "TEST_1": {
@@ -16,7 +16,7 @@
     },
     "TEST_4": {
       "passed": true,
-      "state": "STOPPED"
+      "state": "VERIFYING"
     },
     "TEST_5": {
       "passed": true
@@ -49,7 +49,9 @@
     },
     "TEST_13": {
       "passed": true,
-      "state": "VERIFYING"
+      "state": "STOPPED",
+      "ops_count": 0,
+      "has_policy_block_audit": true
     },
     "TEST_14": {
       "passed": true,
@@ -64,7 +66,7 @@
       "passed": true,
       "negative_amounts": 0,
       "orphaned_cases": 0,
-      "audit_count": 470
+      "audit_count": 665
     }
   }
 }

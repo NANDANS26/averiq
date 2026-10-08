@@ -3,35 +3,46 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/client";
 import { formatPaise } from "@/lib/utils";
 
-interface CanonicalAnalytics {
-  period: string;
+interface CanonicalCohort {
+  timeframe: string;
   total_cases: number;
-  terminal_cases: number;
   recovered_cases: number;
-  gross_recovered_paise: number;
-  organic_baseline_paise: number;
-  incremental_recovered_paise: number;
-  intervention_cost_paise: number;
-  net_incremental_paise: number;
   recovery_rate: number;
-  incremental_recovery_rate: number;
+  total_at_risk_paise: number;
+  organic_recovery_paise: number;
+  gross_recovered_paise: number;
+  incremental_recovery_paise: number;
+  total_intervention_cost_paise: number;
+  net_incremental_recovery_paise: number;
+  average_net_recovery_per_case_paise: number;
+  escalated_cases_count: number;
+  failed_cases_count: number;
+  human_review_cases_count: number;
+  fallback_cases_count: number;
+}
+
+interface CanonicalResponse {
   currency: string;
+  cohorts: Record<string, CanonicalCohort>;
+  definition_notes: Record<string, string>;
 }
 
 export default function RecoveryAnalytics() {
   const [period, setPeriod] = useState<"7d" | "30d" | "all_time">("30d");
 
-  const { data: canonical } = useQuery<CanonicalAnalytics>({
+  const { data: canonicalResp } = useQuery<CanonicalResponse>({
     queryKey: ["canonical-analytics-page", period],
     queryFn: () =>
-      apiClient.get(`/api/v1/analytics/recovery-canonical?period=${period}`).then((r) => r.data),
+      apiClient.get(`/analytics/recovery-canonical?period=${period}`).then((r) => r.data),
   });
 
-  const grossPaise = canonical?.gross_recovered_paise ?? 0;
-  const organicPaise = canonical?.organic_baseline_paise ?? 0;
-  const incrementalPaise = canonical?.incremental_recovered_paise ?? 0;
-  const costPaise = canonical?.intervention_cost_paise ?? 0;
-  const netPaise = canonical?.net_incremental_paise ?? 0;
+  const cohort = canonicalResp?.cohorts?.[period];
+
+  const grossPaise = cohort?.gross_recovered_paise ?? 0;
+  const organicPaise = cohort?.organic_recovery_paise ?? 0;
+  const incrementalPaise = cohort?.incremental_recovery_paise ?? 0;
+  const costPaise = cohort?.total_intervention_cost_paise ?? 0;
+  const netPaise = cohort?.net_incremental_recovery_paise ?? 0;
 
   return (
     <div className="space-y-6">
@@ -146,10 +157,12 @@ export default function RecoveryAnalytics() {
         <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/50">
           <div className="text-xs font-mono text-slate-400 uppercase">Incremental Lift Rate</div>
           <div className="mt-2 text-2xl font-bold font-mono text-white">
-            {((canonical?.incremental_recovery_rate ?? 0) * 100).toFixed(1)}%
+            {cohort && cohort.recovery_rate > 0.35
+              ? `+${(((cohort.recovery_rate) - 0.35) * 100).toFixed(1)}%`
+              : "0.0%"}
           </div>
           <div className="text-[11px] text-emerald-400 mt-1">
-            Recovery rate over unassisted organic conversion
+            Recovery rate over unassisted organic baseline (P0=35%)
           </div>
         </div>
       </div>
@@ -162,23 +175,25 @@ export default function RecoveryAnalytics() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-xs">
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
             <div className="text-slate-500 text-[10px]">TOTAL CASES</div>
-            <div className="text-white text-base font-bold mt-1">{canonical?.total_cases ?? 0}</div>
+            <div className="text-white text-base font-bold mt-1">{cohort?.total_cases ?? 0}</div>
           </div>
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
-            <div className="text-slate-500 text-[10px]">TERMINAL CASES</div>
-            <div className="text-white text-base font-bold mt-1">{canonical?.terminal_cases ?? 0}</div>
+            <div className="text-slate-500 text-[10px]">FAILED / ESCALATED</div>
+            <div className="text-white text-base font-bold mt-1">
+              {(cohort?.failed_cases_count ?? 0) + (cohort?.escalated_cases_count ?? 0)}
+            </div>
           </div>
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
             <div className="text-slate-500 text-[10px]">RECOVERED CASES</div>
-            <div className="text-emerald-400 text-base font-bold mt-1">{canonical?.recovered_cases ?? 0}</div>
+            <div className="text-emerald-400 text-base font-bold mt-1">{cohort?.recovered_cases ?? 0}</div>
           </div>
 
           <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
             <div className="text-slate-500 text-[10px]">BASE RECOVERY RATE</div>
             <div className="text-white text-base font-bold mt-1">
-              {((canonical?.recovery_rate ?? 0) * 100).toFixed(1)}%
+              {((cohort?.recovery_rate ?? 0) * 100).toFixed(1)}%
             </div>
           </div>
         </div>

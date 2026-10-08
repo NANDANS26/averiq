@@ -28,27 +28,32 @@ export default function DemoCenter() {
   // Fetch scenarios list
   const { data: scenarios } = useQuery<DemoScenario[]>({
     queryKey: ["demo-scenarios"],
-    queryFn: () => apiClient.get("/api/v1/demo/scenarios").then((res) => res.data),
+    queryFn: () => apiClient.get("/demo/scenarios").then((res) => res.data),
   });
 
   // Fetch recent demo cases
   const { data: demoCases, refetch: refetchDemoCases } = useQuery<any[]>({
     queryKey: ["demo-cases"],
-    queryFn: () => apiClient.get("/api/v1/demo/cases").then((res) => res.data),
+    queryFn: () => apiClient.get("/demo/cases").then((res) => res.data),
     refetchInterval: 5_000,
   });
 
   // Run scenario mutation
   const runMutation = useMutation({
     mutationFn: (scenarioId: string) =>
-      apiClient.post(`/api/v1/demo/run/${scenarioId}`).then((res) => res.data),
+      apiClient.post(`/demo/run/${scenarioId}`).then((res) => res.data),
     onSuccess: (data: DemoRunResult) => {
       setLastResult(data);
       setRunningId(null);
       refetchDemoCases();
+      queryClient.invalidateQueries({ queryKey: ["demo-cases"] });
       queryClient.invalidateQueries({ queryKey: ["risk-queue-cases"] });
       queryClient.invalidateQueries({ queryKey: ["overview-recent-cases"] });
+      queryClient.invalidateQueries({ queryKey: ["operations-cases"] });
       queryClient.invalidateQueries({ queryKey: ["canonical-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["canonical-analytics-page"] });
+      queryClient.invalidateQueries({ queryKey: ["revenue-risk-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["human-reviews"] });
     },
     onError: () => {
       setRunningId(null);

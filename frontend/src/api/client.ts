@@ -27,9 +27,12 @@ export const apiClient: AxiosInstance = axios.create({
   withCredentials: false,
 });
 
-// Request interceptor — attach Bearer token when available
+// Request interceptor — attach Bearer token when available & strip redundant /api/v1
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    if (config.url && config.url.startsWith("/api/v1")) {
+      config.url = config.url.replace(/^\/api\/v1/, "");
+    }
     const token = localStorage.getItem("averiq_access_token");
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;

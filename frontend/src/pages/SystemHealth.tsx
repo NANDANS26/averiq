@@ -29,13 +29,13 @@ interface ModelHealthResponse {
 export default function SystemHealth() {
   const { data: readiness, refetch: refetchReadiness } = useQuery<ReadinessResponse>({
     queryKey: ["system-readiness"],
-    queryFn: () => apiClient.get("/readiness").then((r) => r.data),
+    queryFn: () => apiClient.get("/system/readiness").then((r) => r.data),
     refetchInterval: 10_000,
   });
 
   const { data: modelHealth } = useQuery<ModelHealthResponse>({
     queryKey: ["model-health"],
-    queryFn: () => apiClient.get("/api/v1/system/model-health").then((r) => r.data),
+    queryFn: () => apiClient.get("/system/model-health").then((r) => r.data),
     staleTime: 30_000,
   });
 

@@ -8,18 +8,38 @@ interface NavItem {
   badge?: string;
 }
 
-const PRIMARY_NAV: NavItem[] = [
+const ADMIN_NAV: NavItem[] = [
   { label: 'Overview', path: '/' },
   { label: 'Risk Queue', path: '/queue' },
   { label: 'Operations', path: '/operations' },
   { label: 'Analytics', path: '/analytics' },
-  { label: 'System', path: '/system' },
+  { label: 'Policy Center', path: '/policy' },
+  { label: 'System Admin', path: '/system' },
   { label: 'Demo Center', path: '/demo' },
+];
+
+const OPERATOR_NAV: NavItem[] = [
+  { label: 'Overview', path: '/' },
+  { label: 'Risk Queue', path: '/queue' },
+  { label: 'Operations Center', path: '/operations' },
+  { label: 'Recovery Analytics', path: '/analytics' },
+  { label: 'Demo Center', path: '/demo' },
+];
+
+const VIEWER_NAV: NavItem[] = [
+  { label: 'Overview', path: '/' },
+  { label: 'Analytics', path: '/analytics' },
 ];
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const navItems = user?.role === 'ADMIN'
+    ? ADMIN_NAV
+    : user?.role === 'OPERATOR'
+      ? OPERATOR_NAV
+      : VIEWER_NAV;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500 selection:text-white">
@@ -43,14 +63,14 @@ export function AppLayout() {
                   AVERIQ
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase leading-none">
-                  Decision Engine
+                  {user?.role === 'ADMIN' ? 'Control Plane' : 'Decision Engine'}
                 </span>
               </div>
             </div>
 
             {/* Main Tabs */}
             <nav className="flex items-center gap-1">
-              {PRIMARY_NAV.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
                   key={item.path}
                   to={item.path}
@@ -78,11 +98,29 @@ export function AppLayout() {
             </div>
 
             {user && (
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <span className="hidden md:inline font-mono">{user.merchantId ? `Merchant: ${user.merchantId.slice(0, 8)}...` : 'Demo Admin'}</span>
+              <div className="flex items-center gap-2.5 text-xs text-slate-400">
+                {/* Role-Aware Badge */}
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold tracking-wider ${
+                      user.role === 'ADMIN'
+                        ? 'bg-violet-950 text-violet-300 border border-violet-800/80 shadow-xs'
+                        : user.role === 'OPERATOR'
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80 shadow-xs'
+                          : 'bg-slate-800 text-slate-300 border border-slate-700'
+                    }`}
+                  >
+                    {user.role === 'ADMIN' ? 'Admin' : user.role === 'OPERATOR' ? 'Operator' : 'Viewer'}
+                  </span>
+                </div>
+
+                <span className="hidden md:inline font-mono text-[11px] text-slate-400">
+                  {user.email}
+                </span>
+
                 <button
                   onClick={logout}
-                  className="px-2.5 py-1 rounded border border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-300 hover:text-white transition-colors"
+                  className="px-2.5 py-1 rounded border border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-300 hover:text-white transition-colors text-[11px]"
                 >
                   Logout
                 </button>

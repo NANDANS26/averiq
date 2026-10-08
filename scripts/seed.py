@@ -49,8 +49,9 @@ DEMO_OPERATOR_EMAIL = "operator@averiq.demo"
 
 # bcrypt hash of "demo_password_123" (cost factor 12)
 DEMO_PASSWORD_HASH = (
-    "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCXvBxsHf.m12P8IVhtlPo2"
+    "$2b$12$tMvWZJIScWD7AA05t4AQ2.GOj0Pvvc1RjS3A5vwxVXf9MYDvesNuO"
 )
+
 
 DEMO_POLICY_ID = uuid.UUID("00000000-0000-0000-0000-000000000010")
 
