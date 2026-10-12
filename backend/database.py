@@ -35,20 +35,60 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase
 
+import ssl
+from sqlalchemy.engine import make_url
+
 from backend.config import settings
 
 # ---------------------------------------------------------------------------
-# Engine
+# Engine Configuration & Parameter Normalization
 # ---------------------------------------------------------------------------
+
+
+def build_async_engine_args(
+    raw_url: str,
+) -> tuple[Any, dict[str, Any]]:
+    """Parse and normalize database URL for asyncpg compatibility.
+
+    Translates libpq URL query parameters (e.g., from Neon or cloud PostgreSQL)
+    into driver-compatible options while preserving UTC timezone settings.
+
+    Supported translations:
+      - ``sslmode=require`` | ``verify-full`` | ``verify-ca``:
+        Translated to standard Python SSLContext passed via ``connect_args["ssl"]``.
+        Certificates are strictly verified with CA validation.
+      - Unsupported libpq parameters (e.g. ``channel_binding``) are removed from the URL
+        query string to prevent asyncpg TypeError.
+    """
+    url = make_url(raw_url)
+    query_dict = dict(url.query)
+
+    connect_args: dict[str, Any] = {
+        "server_settings": {"TimeZone": "UTC"}
+    }
+
+    sslmode = query_dict.pop("sslmode", None)
+    query_dict.pop("channel_binding", None)
+
+    if sslmode in ("require", "verify-ca", "verify-full"):
+        ctx = ssl.create_default_context()
+        if sslmode == "verify-ca":
+            ctx.check_hostname = False
+        connect_args["ssl"] = ctx
+
+    clean_url = url.set(query=query_dict)
+    return clean_url, connect_args
+
+
+_clean_url, _connect_args = build_async_engine_args(settings.DATABASE_URL)
 
 # Use NullPool for reliable execution across Celery tasks and FastAPI requests
 # where different asyncio event loops are created per task invocation.
 _engine: AsyncEngine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,               # Set to True for SQL query logging in dev
+    _clean_url,
+    echo=False,  # Set to True for SQL query logging in dev
     poolclass=NullPool,
-    # Ensure all datetime values include timezone info (UTC)
-    connect_args={"server_settings": {"TimeZone": "UTC"}},
+    connect_args=_connect_args,
 )
 
 # ---------------------------------------------------------------------------
@@ -59,7 +99,7 @@ _engine: AsyncEngine = create_async_engine(
 async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
     bind=_engine,
     class_=AsyncSession,
-    expire_on_commit=False,   # Keep objects accessible after session.commit()
+    expire_on_commit=False,  # Keep objects accessible after session.commit()
     autocommit=False,
     autoflush=False,
 )

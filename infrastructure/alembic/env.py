@@ -57,10 +57,21 @@ target_metadata = Base.metadata
 def get_url() -> str:
     """Return the synchronous PostgreSQL URL used by Alembic.
 
-    Settings loads the project-root .env file, so migrations use the same
-    configuration source as the FastAPI application.
+    Priority order:
+      1. ``ALEMBIC_DATABASE_URL``: Explicit migration override (e.g. for CI or targeting Neon directly).
+      2. If ``ALEMBIC_TARGET_DB="neon"``: Uses ``DATABASE_URL_UNPOOLED`` or ``DATABASE_URL`` from environment/settings.
+      3. Default: ``settings.DATABASE_SYNC_URL or settings.DATABASE_URL`` (preserves local development).
     """
-    url = settings.DATABASE_SYNC_URL or settings.DATABASE_URL
+    override = os.environ.get("ALEMBIC_DATABASE_URL")
+    target_env = os.environ.get("ALEMBIC_TARGET_DB", "").lower()
+
+    if override:
+        url = override
+    elif target_env == "neon":
+        # Target Neon directly using unpooled URL if present, otherwise primary DATABASE_URL
+        url = os.environ.get("DATABASE_URL_UNPOOLED") or settings.DATABASE_URL
+    else:
+        url = settings.DATABASE_SYNC_URL or settings.DATABASE_URL
 
     url = url.replace(
         "postgresql+asyncpg://",
@@ -77,7 +88,7 @@ def get_url() -> str:
 
     if not url:
         raise RuntimeError(
-            "No database URL configured. Set DATABASE_SYNC_URL or DATABASE_URL."
+            "No database URL configured. Set ALEMBIC_DATABASE_URL, DATABASE_SYNC_URL, or DATABASE_URL."
         )
 
     return url

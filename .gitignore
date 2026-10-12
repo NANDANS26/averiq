@@ -122,3 +122,4 @@ infrastructure/alembic/__pycache__/
 test-results/
 playwright-report/
 playwright/.cache/
+.neon
