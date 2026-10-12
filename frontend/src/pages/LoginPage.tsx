@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   function validate(): boolean {
@@ -36,6 +37,7 @@ export default function LoginPage() {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setHasSubmitted(true);
     if (!validate()) return;
 
     try {
@@ -55,11 +57,12 @@ export default function LoginPage() {
     setEmail('demo@averiq.io');
     setPassword(demoPwd);
     setFieldErrors({});
+    setHasSubmitted(false);
     setDemoNotice('Demo credentials populated. Click "Sign in" below to authenticate.');
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 shadow-sm">
         {/* Logo / title */}
         <div className="mb-6 text-center">
@@ -79,12 +82,14 @@ export default function LoginPage() {
             size="sm"
             onClick={handleFillDemo}
             disabled={isLoading}
+            data-testid="demo-operator-fill-btn"
             className="mt-2.5 w-full border-indigo-500/40 text-xs font-medium hover:bg-indigo-500/20"
           >
             Try Demo (Operator)
           </Button>
           {demoNotice && (
             <p
+              data-testid="demo-notice"
               className={`mt-2 text-xs font-medium ${
                 demoNotice.includes('not configured') ? 'text-amber-400' : 'text-emerald-400'
               }`}
@@ -119,14 +124,17 @@ export default function LoginPage() {
               onChange={(e) => {
                 setEmail(e.target.value);
                 setDemoNotice(null);
+                if (fieldErrors.email) {
+                  setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                }
               }}
               disabled={isLoading}
-              aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-              aria-invalid={!!fieldErrors.email}
+              aria-describedby={hasSubmitted && fieldErrors.email ? 'email-error' : undefined}
+              aria-invalid={hasSubmitted && !!fieldErrors.email}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-              placeholder="operator@example.com"
+              placeholder="demo@averiq.io"
             />
-            {fieldErrors.email && (
+            {hasSubmitted && fieldErrors.email && (
               <p id="email-error" className="mt-1 text-xs text-destructive" role="alert">
                 {fieldErrors.email}
               </p>
@@ -146,14 +154,17 @@ export default function LoginPage() {
               onChange={(e) => {
                 setPassword(e.target.value);
                 setDemoNotice(null);
+                if (fieldErrors.password) {
+                  setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                }
               }}
               disabled={isLoading}
-              aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-              aria-invalid={!!fieldErrors.password}
+              aria-describedby={hasSubmitted && fieldErrors.password ? 'password-error' : undefined}
+              aria-invalid={hasSubmitted && !!fieldErrors.password}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
               placeholder="••••••••"
             />
-            {fieldErrors.password && (
+            {hasSubmitted && fieldErrors.password && (
               <p id="password-error" className="mt-1 text-xs text-destructive" role="alert">
                 {fieldErrors.password}
               </p>
