@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   function validate(): boolean {
     const errors: { email?: string; password?: string } = {};
@@ -45,13 +46,52 @@ export default function LoginPage() {
     }
   }
 
+  function handleFillDemo() {
+    const demoPwd = import.meta.env.VITE_DEMO_PASSWORD;
+    if (!demoPwd) {
+      setDemoNotice('Demo password not configured (VITE_DEMO_PASSWORD missing).');
+      return;
+    }
+    setEmail('demo@averiq.io');
+    setPassword(demoPwd);
+    setFieldErrors({});
+    setDemoNotice('Demo credentials populated. Click "Sign in" below to authenticate.');
+  }
+
   return (
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 shadow-sm">
         {/* Logo / title */}
-        <div className="mb-8 text-center">
+        <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-foreground">Averiq</h1>
           <p className="mt-1 text-sm text-muted-foreground">AI Revenue Recovery Decision Engine</p>
+        </div>
+
+        {/* Try Demo quick access block */}
+        <div className="mb-6 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-3.5 text-center">
+          <p className="text-xs font-medium text-indigo-400">Jury & Evaluation Preview</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Populate test credentials for the interactive Demo Center
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleFillDemo}
+            disabled={isLoading}
+            className="mt-2.5 w-full border-indigo-500/40 text-xs font-medium hover:bg-indigo-500/20"
+          >
+            Try Demo (Operator)
+          </Button>
+          {demoNotice && (
+            <p
+              className={`mt-2 text-xs font-medium ${
+                demoNotice.includes('not configured') ? 'text-amber-400' : 'text-emerald-400'
+              }`}
+            >
+              {demoNotice}
+            </p>
+          )}
         </div>
 
         {/* Global API error */}
@@ -76,7 +116,10 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setDemoNotice(null);
+              }}
               disabled={isLoading}
               aria-describedby={fieldErrors.email ? 'email-error' : undefined}
               aria-invalid={!!fieldErrors.email}
@@ -100,7 +143,10 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setDemoNotice(null);
+              }}
               disabled={isLoading}
               aria-describedby={fieldErrors.password ? 'password-error' : undefined}
               aria-invalid={!!fieldErrors.password}
