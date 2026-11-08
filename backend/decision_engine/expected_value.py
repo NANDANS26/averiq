@@ -48,3 +48,39 @@ def compute_expected_value(
     gross_ev = Decimal(str(recovery_probability)) * Decimal(payment_amount_at_risk)
     floored = gross_ev.to_integral_value(rounding=ROUND_FLOOR)
     return int(floored) - int(cost) - int(risk_penalty)
+
+
+def compute_incremental_expected_value(
+    p_action: float,
+    p_baseline: float,
+    amount_paise: int,
+    cost_paise: int = 0,
+    risk_penalty_paise: int = 0,
+) -> int:
+    """Compute incremental expected net recovery value in integer minor units (paise).
+
+    Incremental Uplift = max(0.0, P(recovery | X, action) - P(recovery | X, NO_INTERVENTION))
+    Gross Incremental Recovery = floor(Incremental Uplift * amount_paise)
+    Net Incremental EV = Gross Incremental Recovery - cost_paise - risk_penalty_paise
+
+    Args:
+        p_action: float in [0.0, 1.0] from recoverability model for the action
+        p_baseline: float in [0.0, 1.0] from recoverability model for baseline (NO_INTERVENTION)
+        amount_paise: integer paise (must be > 0)
+        cost_paise: integer paise cost of this action (default 0)
+        risk_penalty_paise: integer paise risk adjustment (default 0)
+
+    Returns:
+        int: Net incremental EV in minor units (paise). May be negative. Never float.
+    """
+    if not (0.0 <= p_action <= 1.0):
+        raise ValueError(f"p_action must be in [0.0, 1.0], got {p_action}")
+    if not (0.0 <= p_baseline <= 1.0):
+        raise ValueError(f"p_baseline must be in [0.0, 1.0], got {p_baseline}")
+    if amount_paise <= 0:
+        raise ValueError(f"amount_paise must be > 0, got {amount_paise}")
+
+    uplift = max(0.0, p_action - p_baseline)
+    gross_dec = Decimal(str(uplift)) * Decimal(amount_paise)
+    floored = gross_dec.to_integral_value(rounding=ROUND_FLOOR)
+    return int(floored) - int(cost_paise) - int(risk_penalty_paise)

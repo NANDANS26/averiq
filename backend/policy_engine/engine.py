@@ -16,10 +16,19 @@ Fully stateless. Requirements: FR-POLICY-001 through FR-POLICY-009, FR-POLICY-01
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Final
 
 from shared.contracts.enums import FailureCategory, PolicyDecisionOutcome
 from shared.contracts.schemas import InterventionCandidate, PolicyConfig
+
+RULE_TO_REASON_CODE: Final[dict[str, str]] = {
+    "payment_already_recovered": "BLOCK_PAYMENT_RECOVERED",
+    "confidence_threshold": "BLOCK_CONFIDENCE_LOW",
+    "amount_limit": "BLOCK_AMOUNT_EXCEEDED",
+    "retry_budget": "BLOCK_RETRY_BUDGET_EXHAUSTED",
+    "cooldown": "BLOCK_COOLDOWN_ACTIVE",
+    "fraud_block": "BLOCK_FRAUD_SUSPECTED",
+}
 
 
 @dataclass(frozen=True)
@@ -28,6 +37,7 @@ class PolicyDecision:
     blocking_rules: list[str] = field(default_factory=list)
     evaluated_values: dict[str, Any] = field(default_factory=dict)
     policy_version: str = ""
+    reason_codes: list[str] = field(default_factory=list)
 
 
 class PolicyEngine:
@@ -75,6 +85,7 @@ class PolicyEngine:
                 blocking_rules=[],
                 evaluated_values=evaluated,
                 policy_version=policy.version,
+                reason_codes=["APPROVED"],
             )
 
         blocking: list[str] = []
@@ -106,11 +117,13 @@ class PolicyEngine:
             blocking.append("fraud_block")
 
         if blocking:
+            reason_codes = [RULE_TO_REASON_CODE.get(rule, f"BLOCK_{rule.upper()}") for rule in blocking]
             return PolicyDecision(
                 outcome=PolicyDecisionOutcome.BLOCKED,
                 blocking_rules=blocking,
                 evaluated_values=evaluated,
                 policy_version=policy.version,
+                reason_codes=reason_codes,
             )
 
         # Rule 9: human_approval
@@ -120,6 +133,7 @@ class PolicyEngine:
                 blocking_rules=[],
                 evaluated_values=evaluated,
                 policy_version=policy.version,
+                reason_codes=["REQUIRES_HUMAN_APPROVAL"],
             )
 
         return PolicyDecision(
@@ -127,4 +141,5 @@ class PolicyEngine:
             blocking_rules=[],
             evaluated_values=evaluated,
             policy_version=policy.version,
+            reason_codes=["APPROVED"],
         )

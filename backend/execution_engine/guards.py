@@ -185,8 +185,8 @@ class CanExecuteAction:
             select(ExternalOperation)
             .where(
                 ExternalOperation.case_id == case.id,
-                ExternalOperation.action_type == intervention_type,
-                ExternalOperation.status == "IN_PROGRESS",
+                ExternalOperation.action_type.in_([intervention_type, f"CREATE_{intervention_type}"]),
+                ExternalOperation.status.in_(["REQUESTED", "IN_PROGRESS"]),
             )
             .limit(1)
         )
@@ -218,7 +218,7 @@ class CanExecuteAction:
             select(ExternalOperation)
             .where(
                 ExternalOperation.action_id == action_id,
-                ExternalOperation.status == "SUCCEEDED",
+                ExternalOperation.status.in_(["SUCCEEDED", "VERIFIED"]),
             )
             .limit(1)
         )

@@ -16,6 +16,12 @@ from __future__ import annotations
 from decimal import Decimal, ROUND_FLOOR
 from typing import Any, Final
 
+try:
+    from backend.config import settings
+    DEFAULT_FALLBACK_PROB: float = settings.FALLBACK_PROBABILITY
+except Exception:
+    DEFAULT_FALLBACK_PROB: float = 0.35
+
 from ai.models.action_value_model import (
     DEFAULT_INTERVENTION_COSTS_PAISE,
     ActionValueEstimator,
@@ -35,11 +41,14 @@ def compute_incremental_ev(
     uplift: float,
     amount_paise: int,
     cost_paise: int,
+    risk_penalty_paise: int = 0,
 ) -> int:
-    """Compute floor(uplift × amount) - cost using Decimal for integer paise precision."""
+    """Compute floor(uplift × amount) - cost - risk_penalty using Decimal for integer paise precision."""
+    if amount_paise <= 0:
+        return -cost_paise - risk_penalty_paise
     gross_dec = Decimal(str(max(0.0, uplift))) * Decimal(amount_paise)
     gross_paise = int(gross_dec.to_integral_value(rounding=ROUND_FLOOR))
-    return gross_paise - cost_paise
+    return gross_paise - cost_paise - risk_penalty_paise
 
 
 class ContextAwareInterventionRanker:
@@ -86,15 +95,15 @@ class ContextAwareInterventionRanker:
                 })
             else:
                 probs = {
-                    "NO_INTERVENTION": 0.35,
-                    "PAYMENT_LINK": 0.35,
-                    "RETRY": 0.35,
-                    "CUSTOMER_ACTION": 0.35,
+                    "NO_INTERVENTION": DEFAULT_FALLBACK_PROB,
+                    "PAYMENT_LINK": DEFAULT_FALLBACK_PROB,
+                    "RETRY": DEFAULT_FALLBACK_PROB,
+                    "CUSTOMER_ACTION": DEFAULT_FALLBACK_PROB,
                 }
         else:
             probs = dict(action_probabilities)
 
-        p0 = probs.get("NO_INTERVENTION", 0.35)
+        p0 = probs.get("NO_INTERVENTION", DEFAULT_FALLBACK_PROB)
 
         candidates: list[InterventionCandidate] = []
         candidate_details: list[dict[str, Any]] = []
@@ -215,9 +224,9 @@ class ContextAwareInterventionRanker:
         # Secondary: recovery_probability descending
         # Tertiary: lower cost
         # ---------------------------------------------------------------------
-        def _sort_key(c: InterventionCandidate) -> tuple[int, float, int]:
+        def _sort_key(c: InterventionCandidate) -> tuple[int, float, int, str]:
             cost = self.costs.get(c.intervention_type.value, 0)
-            return (c.expected_recovery_value, c.recovery_probability, -cost)
+            return (c.expected_recovery_value, c.recovery_probability, -cost, c.intervention_type.value)
 
         ranked = sorted(candidates, key=_sort_key, reverse=True)
 

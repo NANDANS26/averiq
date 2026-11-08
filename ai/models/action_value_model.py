@@ -34,6 +34,12 @@ from ai.data.v2.features import (
 from shared.contracts.enums import InterventionType
 from shared.contracts.schemas import RecoverabilityFeatures
 
+try:
+    from backend.config import settings
+    DEFAULT_FALLBACK_PROB: float = settings.FALLBACK_PROBABILITY
+except Exception:
+    DEFAULT_FALLBACK_PROB: float = 0.35
+
 MODEL_VERSION_V3: Final[str] = "action-value-v3.0-calibrated"
 DEFAULT_INTERVENTION_COSTS_PAISE: Final[dict[str, int]] = {
     "NO_INTERVENTION": 0,
@@ -137,9 +143,18 @@ class ActionValueEstimator:
             vec = record_to_vector_v2(features)
             arr = np.array([vec], dtype=np.float32)
         elif isinstance(features, (list, np.ndarray)):
-            arr = np.array([features], dtype=np.float32)
+            arr = np.array(features, dtype=np.float32)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
         else:
             raise TypeError(f"Unsupported features type: {type(features)}")
+
+        if arr.shape[1] != len(FEATURE_NAMES_V2):
+            raise ValueError(
+                f"Feature dimension mismatch: expected {len(FEATURE_NAMES_V2)} features, got {arr.shape[1]}"
+            )
+        if np.isnan(arr).any() or np.isinf(arr).any():
+            raise ValueError("Input features contain NaN or Inf values")
 
         probs: dict[str, float] = {}
         for action in self.supported_actions:
@@ -148,7 +163,7 @@ class ActionValueEstimator:
                 cal_p = float(np.clip(self._calibrators[action].predict(raw_p), 0.0, 1.0)[0])
                 probs[action] = round(cal_p, 4)
             else:
-                probs[action] = 0.35
+                probs[action] = DEFAULT_FALLBACK_PROB
 
         return probs
 
@@ -188,6 +203,12 @@ class ActionValueEstimator:
 
         with path.open("rb") as f:
             artifact = pickle.load(f)
+
+        loaded_feature_ver = artifact.get("feature_version")
+        if loaded_feature_ver != FEATURE_VERSION_V2:
+            raise ValueError(
+                f"Feature version mismatch: model artifact uses {loaded_feature_ver}, expected {FEATURE_VERSION_V2}"
+            )
 
         instance = cls(
             model_version=artifact["model_version"],

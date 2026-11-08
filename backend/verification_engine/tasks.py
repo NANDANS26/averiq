@@ -102,6 +102,15 @@ async def _run_async(
                 log.error("verification_case_not_found")
                 return {"status": "case_not_found"}
 
+            # Idempotency check: if case already reached RECOVERED terminal state, exit safely
+            if case.state == "RECOVERED":
+                log.info("case_already_recovered_idempotent", case_id=str(case.id))
+                return {
+                    "status": "already_recovered",
+                    "attempt": attempt,
+                    "attribution_class": case.attribution_class,
+                }
+
             # 2. Query gateway via VerificationEngine
             gateway_ref_id = ext_op.external_operation_id or str(ext_op.id)
             verification_outcome: VerificationOutcome = await engine.verify(
@@ -110,6 +119,16 @@ async def _run_async(
             )
 
             log.info("verification_outcome_received", outcome=verification_outcome.value)
+
+            # Record observed recovery outcome feedback in case metadata
+            now = datetime.now(timezone.utc)
+            if case.case_metadata is None:
+                case.case_metadata = {}
+            case.case_metadata["observed_outcome"] = {
+                "outcome": verification_outcome.value,
+                "attempt": attempt,
+                "reconciled_at": now.isoformat(),
+            }
 
             # 3. Record VerificationAttempt
             count_stmt = select(func.count(VerificationAttempt.id)).where(
@@ -126,11 +145,10 @@ async def _run_async(
                 outcome=verification_outcome.value,
                 gateway_status="paid" if verification_outcome == VerificationOutcome.RECOVERED else "created",
                 verification_strategy="PaymentLinkReconciliationStrategy",
-                scheduled_at=datetime.now(timezone.utc),
+                scheduled_at=now,
             )
 
             # 4. Handle outcome
-            now = datetime.now(timezone.utc)
             if verification_outcome == VerificationOutcome.RECOVERED:
                 ext_op.status = "VERIFIED"
                 ext_op.reconciled_at = now
@@ -162,19 +180,25 @@ async def _run_async(
                     "attribution_class": case.attribution_class,
                 }
 
+            if verification_outcome == VerificationOutcome.TIMEOUT:
+                ext_op.status = "TIMEOUT"
+
             # Still unresolved
-            should_esc = await scheduler.should_escalate(session, ext_op.id) if hasattr(scheduler, "should_escalate") else (attempt >= 3)
+            max_attempts = getattr(settings, "VERIFICATION_MAX_ATTEMPTS", 3)
+            should_esc = (current_attempt_num >= max_attempts) or (
+                hasattr(scheduler, "should_escalate") and await scheduler.should_escalate(session, ext_op.id)
+            )
             if should_esc:
-                log.warning("verification_attempts_exhausted_escalating")
+                log.warning("verification_attempts_exhausted_escalating", attempts=current_attempt_num)
                 await state_machine.transition(
                     session,
                     case_id=case.id,
                     to_state="ESCALATED",
                     actor="VERIFICATION_ENGINE",
-                    reason=f"Exhausted verification attempts ({attempt}) without confirmation",
+                    reason=f"Exhausted verification attempts ({current_attempt_num}) without confirmation",
                     correlation_id=correlation_id,
                 )
-                return {"status": "escalated", "attempt": attempt}
+                return {"status": "escalated", "attempt": current_attempt_num}
 
             # Schedule re-verification
             scheduler.schedule_reverification(

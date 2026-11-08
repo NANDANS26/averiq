@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ai.providers.stub import StubAIProvider
 from backend.config import settings
@@ -378,12 +378,41 @@ async def _run_pipeline_async(case_id_str: str, merchant_id_str: str) -> dict[st
 
             from backend.decision_engine.context_aware_ranker import ContextAwareInterventionRanker
 
+            # Query merchant total payment link count
+            plink_stmt = select(func.count(Intervention.id)).where(
+                Intervention.merchant_id == merchant_id,
+                Intervention.intervention_type == "PAYMENT_LINK",
+            )
+            plink_count_res = await session.execute(plink_stmt)
+            merchant_payment_link_count = plink_count_res.scalar() or 0
+
+            # Query existing interventions on this specific case for cooldown & retry budget
+            case_intvs_stmt = select(Intervention).where(
+                Intervention.case_id == case.id
+            ).order_by(Intervention.created_at.desc())
+            case_intvs_res = await session.execute(case_intvs_stmt)
+            existing_case_intvs = list(case_intvs_res.scalars().all())
+
+            # Cooldown calculation
+            if existing_case_intvs:
+                last_intv_time = existing_case_intvs[0].created_at
+                if last_intv_time.tzinfo is None:
+                    last_intv_time = last_intv_time.replace(tzinfo=timezone.utc)
+                seconds_since_last_intv = max(0.0, (now - last_intv_time).total_seconds())
+            else:
+                seconds_since_last_intv = 86400.0  # No prior intervention, cooldown satisfied
+
+            # Authoritative check for whether payment is already recovered
+            is_case_recovered = (case.state == "RECOVERED") or (
+                payment is not None and getattr(payment, "status", None) == "captured"
+            )
+
             ranker = ContextAwareInterventionRanker()
             ranked_candidates, decision_trace = ranker.generate_and_rank_candidates(
                 context=case_context,
                 policy_config=policy_cfg,
                 operating_mode=case.operating_mode,
-                payment_link_count=0,
+                payment_link_count=merchant_payment_link_count,
                 model_version=model_version,
                 action_probabilities=action_probs,
                 failure_category=failure_cat,
@@ -400,20 +429,22 @@ async def _run_pipeline_async(case_id_str: str, merchant_id_str: str) -> dict[st
             chosen_intervention = None
 
             for c in ranked_candidates:
+                # Map check constraints
+                type_str = "ESCALATE" if c.intervention_type == InterventionType.ESCALATE_TO_HUMAN else c.intervention_type.value
+                intv_count_for_candidate = sum(1 for i in existing_case_intvs if i.intervention_type == type_str)
+
                 p_decision = policy_engine.evaluate(
                     candidate=c,
                     policy=policy_cfg,
                     payment_amount_at_risk=int(case.payment_amount_at_risk),
                     currency=case.currency,
                     failure_category=failure_cat,
-                    seconds_since_last_intervention=3600.0,
-                    intervention_count=0,
+                    seconds_since_last_intervention=seconds_since_last_intv,
+                    intervention_count=intv_count_for_candidate,
                     case_state="ACTION_PENDING",
-                    is_recovered=False,
+                    is_recovered=is_case_recovered,
                 )
 
-                # Map check constraints
-                type_str = "ESCALATE" if c.intervention_type == InterventionType.ESCALATE_TO_HUMAN else c.intervention_type.value
                 exec_cap_str = "EXECUTABLE" if c.execution_capability == ExecutionCapability.CREATE_PAYMENT_LINK else "INTERNAL_ACTION"
 
                 prov_status = getattr(c, "provider_support_status", None)
@@ -431,7 +462,10 @@ async def _run_pipeline_async(case_id_str: str, merchant_id_str: str) -> dict[st
                     requires_human_approval=(p_decision.outcome == PolicyDecisionOutcome.HUMAN_REVIEW),
                     expected_recovery_value=c.expected_recovery_value,
                     policy_decision=p_decision.outcome.value,
-                    policy_blocking_rules={"rules": p_decision.blocking_rules} if p_decision.blocking_rules else None,
+                    policy_blocking_rules={
+                        "rules": p_decision.blocking_rules,
+                        "reason_codes": p_decision.reason_codes,
+                    } if p_decision.blocking_rules else None,
                     policy_evaluated_values=p_decision.evaluated_values or None,
                     execution_status="PENDING",
                     created_at=now,
@@ -447,8 +481,6 @@ async def _run_pipeline_async(case_id_str: str, merchant_id_str: str) -> dict[st
 
             # If no candidate was approved/human review, fallback to STOP candidate
             if chosen_candidate is None:
-                for c, intv_row in [(c, i) for c in ranked_candidates]: # fallback
-                    pass
                 await state_machine.transition(
                     session,
                     case_id=case.id,

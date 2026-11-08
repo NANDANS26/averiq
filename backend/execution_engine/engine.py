@@ -96,8 +96,28 @@ class ExecutionEngine:
             log.error("execution_intervention_not_found")
             return {"status": "intervention_not_found"}
 
-        # 2. Assign action_id for idempotency
-        action_id = uuid.uuid4()
+        # 2. Derive deterministic action_id for idempotency and check existing operation
+        ext_op_stmt = (
+            select(ExternalOperation)
+            .where(
+                ExternalOperation.case_id == case.id,
+                ExternalOperation.intervention_id == intervention.id,
+            )
+            .order_by(ExternalOperation.created_at.desc())
+        )
+        existing_op = (await session.execute(ext_op_stmt)).scalars().first()
+
+        if existing_op:
+            action_id = existing_op.action_id
+            if existing_op.status in ("SUCCEEDED", "VERIFIED"):
+                log.info("execution_already_succeeded_idempotent", action_id=str(action_id))
+                return {
+                    "status": "succeeded",
+                    "action_id": str(action_id),
+                    "external_operation_id": existing_op.external_operation_id,
+                }
+        else:
+            action_id = uuid.uuid5(uuid.NAMESPACE_OID, f"averiq:action:{merchant_id}:{case.id}:{intervention.id}")
 
         # 3. Pre-condition check via CanExecuteAction
         guard_result: GuardResult = await self.guard.check(
@@ -143,7 +163,7 @@ class ExecutionEngine:
             merchant_id=merchant_id,
             intervention_id=intervention.id,
             action_type=action_type,
-            status="IN_PROGRESS",
+            status="REQUESTED",
             submitted_at=now,
             created_at=now,
             updated_at=now,

@@ -66,5 +66,5 @@
 
 ## Ethical & Operational Safeguards
 1. **Financial Precision**: Authoritative financial amounts remain integer paise (`DATA-001`, `DATA-003`). Floats are restricted strictly to model weights and probability outputs.
-2. **Fail-Safe Fallback**: If the model artifact fails SHA-256 verification or raises an inference exception, the pipeline falls back gracefully to a deterministic baseline (`0.70`), logs an operational alert, and proceeds to the Policy Gate.
+2. **Fail-Safe Fallback**: If the model artifact fails SHA-256 verification or raises an inference exception, the pipeline falls back gracefully to a deterministic baseline (`0.35`), logs an operational alert, and proceeds to the Policy Gate.
 3. **No Direct Execution**: The model is strictly advisory; only `ExecutionEngine` interacting with idempotent gateway abstractions can trigger external operations.
